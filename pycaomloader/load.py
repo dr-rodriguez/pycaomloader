@@ -1,7 +1,7 @@
 # Main code to load CAOM observations
 
 import os
-from sqlalchemy import create_engine, text, Engine
+from sqlalchemy import create_engine, text, Engine, DDL, event
 from sqlalchemy.orm import Session
 from typing import Any
 from datetime import datetime
@@ -10,11 +10,12 @@ from caom2.plane import Plane
 from caom2.artifact import Artifact
 from caom2.shape import Point
 from caom2.obs_reader_writer import ObservationReader
+from sqlalchemy_utils.functions import database_exists, create_database
 from schema import *
 
 
 def load_engine(connection_string: str) -> Engine:
-    # Create SQLAlchemy engine
+    """Create SQLAlchemy engine"""
 
     engine = create_engine(connection_string)
 
@@ -28,23 +29,32 @@ def load_engine(connection_string: str) -> Engine:
     return engine
 
 
-def create_database(connection_string: str,
+def prepare_database(connection_string: str,
                     drop_tables: bool = False
                     ):
-    # Create the database tables
+    """Create the database tables"""
+
+    # Create it if not already present
+    if not database_exists(connection_string):
+        create_database(connection_string)
 
     engine = load_engine(connection_string)
 
-    base = Base  # this comes from schema
+    base = Base  # this comes from schema.py
     base.metadata.bind = engine
 
     if drop_tables:
         base.metadata.drop_all()
+
+    # Logic for ensuring caom2 schema exists first (not applicable for sqlite)
+    if 'sqlite' not in connection_string:
+        event.listen(Base.metadata, 'before_create', DDL("CREATE SCHEMA IF NOT EXISTS caom2"))
     base.metadata.create_all(engine)
 
 
 def store_items(field_items: dict, k: str, v: Any):
-    # Helper to get sub items from CAOM
+    """Helper function to get sub items from CAOM"""
+
     for k2, v2 in vars(v).items():
         # print(k, k2, v2, type(v2))
         if isinstance(v2, (str, int, float, type(None), bool, datetime)):
@@ -56,7 +66,8 @@ def store_items(field_items: dict, k: str, v: Any):
 
 
 def rename_fields(k: str) -> str:
-    # Helper function to rename some fields
+    """Helper function to rename some fields"""
+
     if k== 'target_position':
         k = 'targetPosition'
 
@@ -65,7 +76,7 @@ def rename_fields(k: str) -> str:
 
 def ingest_observation(file_name: str, 
                        connection_string: str):
-    # Ingest the observations
+    """Ingest an observation from an xml file"""
 
     # CAOM object
     obs = ObservationReader().read(source=file_name)
@@ -81,7 +92,7 @@ def ingest_observation(file_name: str,
 
 
 def process_observation(obs: Observation) -> list:
-    # Generate database objects for the observation
+    """Generate database objects for the observation"""
     
     # Database Objects
     db_objects = []
@@ -102,9 +113,9 @@ def process_observation(obs: Observation) -> list:
         k = rename_fields(k)
 
         # Special handling
-        if k in ('target', 'targetPosition', 'proposal', 'telescope', 'environment', 'instrument'):
+        if k in ('target', 'targetPosition', 'proposal', 'telescope', 'environment', 'instrument') and v is not None:
             store_items(field_items, k, v)
-        elif k in ('intent'):
+        elif k in ('intent') and v is not None:
             # SQL validation not properly capturing just the value so have to set it here
             field_items[k] = v.value
         elif k == 'members':
@@ -135,7 +146,7 @@ def process_observation(obs: Observation) -> list:
 
 
 def process_plane(plane: Plane):
-    # Generate database objects for the plane
+    """Generate database objects for the plane"""
     # print(plane)
     pass
 
@@ -146,14 +157,22 @@ def process_artifact(artifact: Artifact):
 
 if __name__ == '__main__':
 
+    # connection_string = 'postgresql+psycopg2://localhost:5432/caom'
     connection_string = 'sqlite:///caom.db'
+
     # Create sqlite database
     CREATE = False
     if CREATE:
         if 'sqlite' in connection_string and os.path.exists('caom.db'):
             os.remove('caom.db')
-        create_database(connection_string)
+        prepare_database(connection_string)
 
     # Ingest XML
     file_name = 'pycaomloader/data/hst_11975_39_wfpc2_wfpc2_f170w_ubai390a.xml'
     ingest_observation(file_name, connection_string)
+
+    my_path = '../../data/CAOM/pyCAOM2/unittests/data/xml/'
+    for f in os.listdir(my_path):
+        if f.endswith('.xml'):
+            print(f'Ingesting {f}')
+            ingest_observation(os.path.join(my_path, f), connection_string)
