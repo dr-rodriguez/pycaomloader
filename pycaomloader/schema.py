@@ -59,7 +59,7 @@ class CaomObservation(CaomCommon, Base):
     sequence_number: Mapped[Optional[int]] = mapped_column('sequenceNumber', Integer)  # caom2:Observation.sequenceNumber		
     meta_release: Mapped[Optional[datetime]] = mapped_column('metaRelease')  # caom2:Observation.metaRelease	timestamp	
     meta_read_groups: Mapped[Optional[str]] = mapped_column('metaReadGroups')   # caom2:Observation.metaReadGroups		
-    proposal_id: Mapped[str] = mapped_column(String(128))  # caom2:Observation.proposal.id		indexed
+    proposal_id: Mapped[Optional[str]] = mapped_column(String(128))  # caom2:Observation.proposal.id		indexed
     proposal_pi: Mapped[Optional[str]] = mapped_column(String(128))  # caom2:Observation.proposal.pi		
     proposal_project: Mapped[Optional[str]] = mapped_column(String(32))  # caom2:Observation.proposal.project		
     proposal_title: Mapped[Optional[str]] = mapped_column(String(256))  # caom2:Observation.proposal.title		
