@@ -1,4 +1,6 @@
-# Database Schema defined by SQLAlchemy
+"""Database Schema defined by SQLAlchemy"""
+
+# pylint: disable=trailing-whitespace, line-too-long, unused-argument, unused-import
 
 from datetime import datetime
 from uuid import UUID
@@ -35,7 +37,7 @@ class Base(DeclarativeBase):
 # }
 
 class CaomCommon:
-    # Common columns for all CAOM Tables
+    """Common columns for all CAOM Tables"""
 
     last_modified: Mapped[Optional[datetime]] = mapped_column('lastModified')  # caom2:Observation.lastModified	timestamp	
     max_last_modified: Mapped[Optional[datetime]] = mapped_column('maxLastModified')  # caom2:Observation.maxLastModified	timestamp	
@@ -44,6 +46,8 @@ class CaomCommon:
 
 
 class CaomObservation(CaomCommon, Base):
+    """Observation Table"""
+
     __tablename__ = "Observation"
 
     # Some attribute names are different from the DB names
@@ -103,7 +107,7 @@ class CaomObservation(CaomCommon, Base):
             return target_type.value
     
     @validates("algorithm")
-    def validate_target_type(self, key, algorithm):
+    def validate_algorithm(self, key, algorithm):
         if algorithm is not None:
             return algorithm.name
 

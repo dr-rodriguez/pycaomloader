@@ -1,17 +1,19 @@
-# Main code to load CAOM observations
+"""Main code to load CAOM observations"""
+
+# pylint: disable=redefined-outer-name
 
 import os
-from sqlalchemy import create_engine, text, Engine, DDL, event
-from sqlalchemy.orm import Session
 from typing import Any
 from datetime import datetime
+from sqlalchemy import create_engine, text, Engine, DDL, event
+from sqlalchemy.orm import Session
 from caom2.observation import Observation
 from caom2.plane import Plane
 from caom2.artifact import Artifact
 from caom2.shape import Point
 from caom2.obs_reader_writer import ObservationReader
 from sqlalchemy_utils.functions import database_exists, create_database
-from schema import *
+from pycaomloader.schema import Base, CaomObservation
 
 
 def load_engine(connection_string: str) -> Engine:
@@ -44,7 +46,7 @@ def prepare_database(connection_string: str,
     base.metadata.bind = engine
 
     if drop_tables:
-        base.metadata.drop_all()
+        base.metadata.drop_all(bind=engine)
 
     # Logic for ensuring caom2 schema exists first (not applicable for sqlite)
     if 'sqlite' not in connection_string:
@@ -113,7 +115,8 @@ def process_observation(obs: Observation) -> list:
         k = rename_fields(k)
 
         # Special handling
-        if k in ('target', 'targetPosition', 'proposal', 'telescope', 'environment', 'instrument') and v is not None:
+        if k in ('target', 'targetPosition', 'proposal', 'telescope', 'environment', 'instrument') \
+            and v is not None:
             store_items(field_items, k, v)
         elif k in ('intent') and v is not None:
             # SQL validation not properly capturing just the value so have to set it here
@@ -153,9 +156,9 @@ def process_plane(plane: Plane):
 
 def process_artifact(artifact: Artifact):
     pass
-        
 
-if __name__ == '__main__':
+
+if __name__ == '__main__':  # pylint: disable=invalid-name
 
     # connection_string = 'postgresql+psycopg2://localhost:5432/caom'
     connection_string = 'sqlite:///caom.db'
