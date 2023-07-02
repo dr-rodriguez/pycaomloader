@@ -13,7 +13,7 @@ from caom2.artifact import Artifact
 from caom2.shape import Point
 from caom2.obs_reader_writer import ObservationReader
 from sqlalchemy_utils.functions import database_exists, create_database
-from pycaomloader.schema import Base, CaomObservation
+from pycaomloader.schema import Base, CaomObservation, CaomPlane
 
 
 def load_engine(connection_string: str) -> Engine:
@@ -106,7 +106,10 @@ def process_observation(obs: Observation) -> list:
         if k == '_planes':
             # Generate plane database objects
             for _, plane in v.items():
-                process_plane(plane)
+                db_plane = process_plane(plane, obs.collection, obs.observation_id)
+                if db_plane is not None:
+                    db_plane.obsID = obs._id
+                    db_objects.append(db_plane)
 
         # strip starting _ for simplicity
         if k.startswith('_'):
@@ -121,10 +124,13 @@ def process_observation(obs: Observation) -> list:
         elif k in ('intent') and v is not None:
             # SQL validation not properly capturing just the value so have to set it here
             field_items[k] = v.value
+        elif k == 'planes':
+            # Planes are handled separately (above)
+            continue
         elif k == 'members':
             # TODO: Figure out how to handle members
             continue
-        elif k == 'meta_read_groups':
+        elif k.endswith('read_groups'):
             # TODO: Figure out how to handle read groups
             continue
         elif 'checksum' in k.lower() or 'uri' in k.lower():
@@ -148,10 +154,51 @@ def process_observation(obs: Observation) -> list:
     return db_objects
 
 
-def process_plane(plane: Plane):
+def process_plane(plane: Plane, collection: str, observation_id: str):
     """Generate database objects for the plane"""
-    # print(plane)
-    pass
+
+    db_plane = CaomPlane()
+
+    # Loop over attributes of obs
+    field_items = {}
+    for k, v in vars(plane).items():
+        if k == '_artifacts':
+            # TODO: Implement artifacts later
+            pass
+
+        # strip starting _ for simplicity
+        if k.startswith('_'):
+            k = k[1:]
+
+        # Special handling
+        if k in ('provenance', 'position', 'time', 'energy', 'metrics', 'polarization', 'custom') \
+            and v is not None:
+            store_items(field_items, k, v)
+        elif k in ('intent') and v is not None:
+            # SQL validation not properly capturing just the value so have to set it here
+            field_items[k] = v.value
+        elif k == 'artifacts':
+            # Artifacts are handled separately (above)
+            continue
+        elif k.endswith('read_groups'):
+            # TODO: Figure out how to handle read groups
+            continue
+        elif 'checksum' in k.lower() or 'uri' in k.lower():
+            # Handle checksum/uri fields
+            field_items[k] = v.uri
+        else:
+            field_items[k] = v
+    
+    # Set some extra, required fields
+    field_items['planeURI'] = f"caom:{collection}/{observation_id}/{plane.product_id}"
+
+    # Map to schema
+    for k, v in field_items.items():
+        setattr(db_plane, k, v)
+
+    print(db_plane)
+
+    return db_plane
 
 
 def process_artifact(artifact: Artifact):
@@ -163,8 +210,8 @@ if __name__ == '__main__':  # pylint: disable=invalid-name
     # connection_string = 'postgresql+psycopg2://localhost:5432/caom'
     connection_string = 'sqlite:///caom.db'
 
-    # Create sqlite database
-    CREATE = False
+    # Create database
+    CREATE = True
     if CREATE:
         if 'sqlite' in connection_string and os.path.exists('caom.db'):
             os.remove('caom.db')
@@ -174,8 +221,8 @@ if __name__ == '__main__':  # pylint: disable=invalid-name
     file_name = 'pycaomloader/data/hst_11975_39_wfpc2_wfpc2_f170w_ubai390a.xml'
     ingest_observation(file_name, connection_string)
 
-    my_path = '../../data/CAOM/pyCAOM2/unittests/data/xml/'
-    for f in os.listdir(my_path):
-        if f.endswith('.xml'):
-            print(f'Ingesting {f}')
-            ingest_observation(os.path.join(my_path, f), connection_string)
+    # my_path = '../../data/CAOM/pyCAOM2/unittests/data/xml/'
+    # for f in os.listdir(my_path):
+    #     if f.endswith('.xml'):
+    #         print(f'Ingesting {f}')
+    #         ingest_observation(os.path.join(my_path, f), connection_string)
