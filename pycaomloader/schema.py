@@ -1,6 +1,6 @@
 """Database Schema defined by SQLAlchemy"""
 
-# pylint: disable=trailing-whitespace, line-too-long, unused-argument, unused-import
+# pylint: disable=trailing-whitespace, line-too-long, unused-argument, unused-import, missing-function-docstring, missing-class-docstring
 
 from datetime import datetime
 from uuid import UUID
@@ -128,7 +128,7 @@ class CaomPlane(CaomCommon, Base):
     obsID: Mapped[UUID]	= mapped_column(ForeignKey("Observation.obsID"))  # obsID	char(36)		true	foreign key			uuid	indexed
     id: Mapped[UUID] = mapped_column('planeID', primary_key=True)	# planeID	char(36)		true	unique plane identifier		caom2:Plane.id	uuid	indexed
     creatorID: Mapped[Optional[str]]  # caom2:Plane.creatorID	uri	indexed
-    product_id: Mapped[str] = mapped_column('productID', String(64))  # caom2:Plane.productID		indexed
+    product_id: Mapped[str] = mapped_column('productID', String(256))  # caom2:Plane.productID		indexed
     meta_release: Mapped[Optional[datetime]] = mapped_column('metaRelease')   # caom2:Plane.metaRelease	timestamp	indexed
     meta_read_groups: Mapped[Optional[str]] = mapped_column('metaReadGroups')  # caom2:Plane.metaReadGroups		
     data_release: Mapped[Optional[datetime]] = mapped_column('dataRelease')  #  caom2:Plane.dataRelease	timestamp	indexed
@@ -154,20 +154,20 @@ class CaomPlane(CaomCommon, Base):
     position_bounds_samples: Mapped[Optional[float]]  # caom2:Plane.position.bounds.samples	caom2:multipolygon	
     position_bounds_size: Mapped[Optional[float]]  # caom2:Plane.position.bounds.size		
     position_resolution: Mapped[Optional[float]]  # caom2:Plane.position.resolution		
-    position_resolutionBounds: Mapped[Optional[float]]  # caom2:Plane.position.resolutionBounds	interval	
+    position_resolution_bounds: Mapped[Optional[float]] = mapped_column('position_resolutionBounds')  # caom2:Plane.position.resolutionBounds	interval	
     position_sampleSize: Mapped[Optional[float]]  # caom2:Plane.position.sampleSize		
     position_dimension_naxis1: Mapped[Optional[int]]  # caom2:Plane.position.dimension.naxis1		
     position_dimension_naxis2: Mapped[Optional[int]]  # caom2:Plane.position.dimension.naxis2		
-    position_timeDependent: Mapped[Optional[bool]]  # caom2:Plane.position.timeDependent		
+    position_time_dependent: Mapped[Optional[bool]] = mapped_column('position_timeDependent')  # caom2:Plane.position.timeDependent		
     energy_bounds: Mapped[Optional[float]]  # caom2:Plane.energy.bounds	interval	indexed
     energy_bounds_samples: Mapped[Optional[float]]  # caom2:Plane.energy.bounds.samples	caom2:multiinterval	
     energy_bounds_lower: Mapped[Optional[float]]  # caom2:Plane.energy.bounds.lower		indexed
     energy_bounds_upper: Mapped[Optional[float]]  # caom2:Plane.energy.bounds.upper		indexed
     energy_bounds_width: Mapped[Optional[float]]  # caom2:Plane.energy.bounds.width		
     energy_dimension: Mapped[Optional[float]]  # caom2:Plane.energy.dimension		
-    energy_resolving_power: Mapped[Optional[float]]  # caom2:Plane.energy.resolvingPower		
-    energy_resolving_power_bounds: Mapped[Optional[float]]  # caom2:Plane.energy.resolvingPowerBounds	interval	
-    energy_sample_size: Mapped[Optional[float]]  # caom2:Plane.energy.sampleSize		
+    energy_resolving_power: Mapped[Optional[float]] = mapped_column('energy_resolvingPower')  # caom2:Plane.energy.resolvingPower		
+    energy_resolving_power_bounds: Mapped[Optional[float]] = mapped_column('energy_resolvingPowerBounds')  # caom2:Plane.energy.resolvingPowerBounds	interval	
+    energy_sample_size: Mapped[Optional[float]] = mapped_column('energy_sampleSize')  # caom2:Plane.energy.sampleSize		
     energy_em_band: Mapped[Optional[str]] = mapped_column('energy_emBand', String(32))                 # caom2:Plane.energy.emBand		
     energy_energy_bands: Mapped[Optional[str]] = mapped_column('energy_energyBands', String(32))            # caom2:Plane.energy.energyBands		
     energy_bandpass_name: Mapped[Optional[str]] = mapped_column('energy_bandpassName', String(32))           # caom2:Plane.energy.bandpassName		

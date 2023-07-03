@@ -1,6 +1,6 @@
 """Main code to load CAOM observations"""
 
-# pylint: disable=redefined-outer-name
+# pylint: disable=redefined-outer-name, protected-access, invalid-name
 
 import os
 from typing import Any
@@ -8,9 +8,9 @@ from datetime import datetime
 from sqlalchemy import create_engine, text, Engine, DDL, event
 from sqlalchemy.orm import Session
 from caom2.observation import Observation
-from caom2.plane import Plane
+from caom2.plane import Plane, Position, Time, Energy, Metrics, Polarization, CustomAxis
 from caom2.artifact import Artifact
-from caom2.shape import Point
+from caom2.shape import Point, Circle, Polygon, Interval
 from caom2.obs_reader_writer import ObservationReader
 from sqlalchemy_utils.functions import database_exists, create_database
 from pycaomloader.schema import Base, CaomObservation, CaomPlane
@@ -57,20 +57,63 @@ def prepare_database(connection_string: str,
 def store_items(field_items: dict, k: str, v: Any):
     """Helper function to get sub items from CAOM"""
 
+    # print(k, v, type(v))
+
+    # Exit early if None
+    if v is None:
+        field_items[k] = v
+        return
+    
+    # Loop over child attributes to set them
     for k2, v2 in vars(v).items():
         # print(k, k2, v2, type(v2))
-        if isinstance(v2, (str, int, float, type(None), bool, datetime)):
-            field_items[k+k2] = v2
-        if isinstance(v2, (set, list)):
-            field_items[k+k2] = ' | '.join([x for x in v2])
-        elif isinstance(v2, (Point)):
+        if k2.endswith('points') or k2.endswith('samples'):
+            # TODO: Figure out how to implement these
+            continue
+        elif isinstance(v2, (Point, Circle, Polygon, Interval, Position, Time, \
+                           Energy, Metrics, Polarization, CustomAxis)) \
+                            or k2.endswith('bounds'):
+            # Recursive check to drill down into members
             store_items(field_items, k+k2, v2)
+        elif isinstance(v2, (str, int, float, type(None), bool, datetime)):
+            field_items[k+k2] = v2
+        elif isinstance(v2, (set, list)):
+            temp = ' | '.join([x for x in v2])
+            if temp.strip() != '':
+                # Don't store empty strings
+                field_items[k+k2] = temp
+
+
+def special_handling(field_items: dict, k: str, v: Any):
+    """Special handling of certain fields"""
+
+    if k in ('target', 'targetPosition', 'proposal', 'telescope', 'environment', 'instrument', \
+             'provenance', 'position', 'time', 'energy', 'metrics', 'polarization', 'custom') \
+            and v is not None:
+        store_items(field_items, k, v)
+    elif k in ('intent') and v is not None:
+        # SQL validation not properly capturing just the value so have to set it here
+        field_items[k] = v.value
+    elif k in ('planes', 'artifacts'):
+        # Handled separately
+        return
+    elif k == 'members':
+        # TODO: Figure out how to handle members
+        return
+    elif k.endswith('read_groups'):
+        # TODO: Figure out how to handle read groups
+        return
+    elif 'checksum' in k.lower() or 'uri' in k.lower():
+        # Handle checksum/uri fields
+        field_items[k] = v.uri
+    else:
+        field_items[k] = v
 
 
 def rename_fields(k: str) -> str:
     """Helper function to rename some fields"""
 
-    if k== 'target_position':
+    if k=='target_position':
         k = 'targetPosition'
 
     return k
@@ -95,7 +138,7 @@ def ingest_observation(file_name: str,
 
 def process_observation(obs: Observation) -> list:
     """Generate database objects for the observation"""
-    
+
     # Database Objects
     db_objects = []
     db_obs = CaomObservation()
@@ -106,10 +149,8 @@ def process_observation(obs: Observation) -> list:
         if k == '_planes':
             # Generate plane database objects
             for _, plane in v.items():
-                db_plane = process_plane(plane, obs.collection, obs.observation_id)
-                if db_plane is not None:
-                    db_plane.obsID = obs._id
-                    db_objects.append(db_plane)
+                db_plane = process_plane(plane, obs.collection, obs.observation_id, obs._id)
+                db_objects.append(db_plane)
 
         # strip starting _ for simplicity
         if k.startswith('_'):
@@ -118,26 +159,7 @@ def process_observation(obs: Observation) -> list:
         k = rename_fields(k)
 
         # Special handling
-        if k in ('target', 'targetPosition', 'proposal', 'telescope', 'environment', 'instrument') \
-            and v is not None:
-            store_items(field_items, k, v)
-        elif k in ('intent') and v is not None:
-            # SQL validation not properly capturing just the value so have to set it here
-            field_items[k] = v.value
-        elif k == 'planes':
-            # Planes are handled separately (above)
-            continue
-        elif k == 'members':
-            # TODO: Figure out how to handle members
-            continue
-        elif k.endswith('read_groups'):
-            # TODO: Figure out how to handle read groups
-            continue
-        elif 'checksum' in k.lower() or 'uri' in k.lower():
-            # Handle checksum/uri fields
-            field_items[k] = v.uri
-        else:
-            field_items[k] = v
+        special_handling(field_items, k, v)
 
     # Set the type code based on whether this is Derived or Simple
     if 'Derived' in obs.__class__.__name__ or 'Composite' in obs.__class__.__name__:
@@ -154,7 +176,7 @@ def process_observation(obs: Observation) -> list:
     return db_objects
 
 
-def process_plane(plane: Plane, collection: str, observation_id: str):
+def process_plane(plane: Plane, collection: str, observation_id: str, observation_uri: str):
     """Generate database objects for the plane"""
 
     db_plane = CaomPlane()
@@ -171,26 +193,11 @@ def process_plane(plane: Plane, collection: str, observation_id: str):
             k = k[1:]
 
         # Special handling
-        if k in ('provenance', 'position', 'time', 'energy', 'metrics', 'polarization', 'custom') \
-            and v is not None:
-            store_items(field_items, k, v)
-        elif k in ('intent') and v is not None:
-            # SQL validation not properly capturing just the value so have to set it here
-            field_items[k] = v.value
-        elif k == 'artifacts':
-            # Artifacts are handled separately (above)
-            continue
-        elif k.endswith('read_groups'):
-            # TODO: Figure out how to handle read groups
-            continue
-        elif 'checksum' in k.lower() or 'uri' in k.lower():
-            # Handle checksum/uri fields
-            field_items[k] = v.uri
-        else:
-            field_items[k] = v
-    
+        special_handling(field_items, k, v)
+
     # Set some extra, required fields
     field_items['planeURI'] = f"caom:{collection}/{observation_id}/{plane.product_id}"
+    field_items['obsID'] = observation_uri
 
     # Map to schema
     for k, v in field_items.items():
