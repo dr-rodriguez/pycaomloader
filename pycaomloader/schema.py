@@ -105,14 +105,14 @@ class CaomObservation(CaomCommon, Base):
     # https://docs.sqlalchemy.org/en/20/orm/mapped_attributes.html#simple-validators
 
     @validates("target_type")
-    def validate_target_type(self, key, target_type):
-        if target_type is not None:
-            return target_type.value
+    def get_value(self, key, column):
+        if column is not None:
+            return column.value
     
     @validates("algorithm")
-    def validate_algorithm(self, key, algorithm):
-        if algorithm is not None:
-            return algorithm.name
+    def get_name(self, key, column):
+        if column is not None:
+            return column.name
 
     def __repr__(self) -> str:
         return repr(f'Observation {self.observation_id}')
@@ -196,8 +196,6 @@ class CaomPlane(CaomCommon, Base):
     custom_bounds_width: Mapped[Optional[float]]  # caom2:Plane.custom.bounds.width		
     custom_dimension: Mapped[Optional[int]]  # caom2:Plane.custom.dimension		
     metaProducer: Mapped[Optional[str]]	 # caom2:Plane.metaProducer	uri	
-
-    # TODO: Continue renaming columns to match Plane object vs Database table
 
     # Relationships
     observation = relationship("CaomObservation", back_populates="planes")
